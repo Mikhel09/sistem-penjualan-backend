@@ -4,6 +4,8 @@ const pool = require('./db');
 const authRoutes = require('./routes/auth');
 const verifyToken = require('./middleware/auth');
 const transactionRoutes = require('./routes/transactions');
+const checkRole = require('./middleware/checkRole');
+const userRoutes = require('./routes/users');
 require('dotenv').config();
 
 const app = express();
@@ -11,6 +13,9 @@ app.use(cors({
      origin: ['http://localhost:5173', 'https://sistem-penjualan-frontend.vercel.app'],
    }));
 app.use(express.json());
+app.use('/api/users', userRoutes);
+
+
 
 app.get('/', (req, res) => {
   res.send('Server berjalan!');
@@ -34,7 +39,7 @@ app.get('/api/products', verifyToken, async (req, res) => {
   }
 });
 
-app.post('/api/products', verifyToken, async (req, res) => {
+app.post('/api/products', verifyToken, checkRole('owner', 'admin'), async (req, res) => {
   try {
     const { nama, harga, stok, attributes } = req.body;
     const result = await pool.query(
