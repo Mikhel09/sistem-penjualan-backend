@@ -21,6 +21,7 @@ const produkSchema = z.object({
   stok: z.number().int('Stok harus bilangan bulat').nonnegative('Stok tidak boleh negatif'),
   stok_minimum: z.number().int().nonnegative().optional(),
   attributes: z.record(z.any()).optional(),
+  store_id: z.number().optional(),
 });
 
 const staffSchema = z.object({
