@@ -16,7 +16,6 @@ app.use(express.json());
 app.use('/api/users', userRoutes);
 
 
-
 app.get('/', (req, res) => {
   res.send('Server berjalan!');
 });
@@ -58,4 +57,50 @@ app.use('/api/transactions', transactionRoutes);
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server jalan di http://localhost:${PORT}`);
+});
+
+// Edit produk (hanya owner/admin, hanya produk milik tenant sendiri)
+app.put('/api/products/:id', verifyToken, checkRole('owner', 'admin'), async (req, res) => {
+  const { id } = req.params;
+  const { nama, harga, stok, attributes } = req.body;
+
+  try {
+    const result = await pool.query(
+      `UPDATE products
+       SET nama = $1, harga = $2, stok = $3, attributes = $4
+       WHERE id = $5 AND tenant_id = $6
+       RETURNING *`,
+      [nama, harga, stok, attributes || {}, id, req.tenant_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Produk tidak ditemukan' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal mengubah produk' });
+  }
+});
+
+// Hapus produk (hanya owner/admin, hanya produk milik tenant sendiri)
+app.delete('/api/products/:id', verifyToken, checkRole('owner', 'admin'), async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      'DELETE FROM products WHERE id = $1 AND tenant_id = $2 RETURNING id',
+      [id, req.tenant_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Produk tidak ditemukan' });
+    }
+
+    res.json({ message: 'Produk berhasil dihapus' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal menghapus produk' });
+  }
 });
