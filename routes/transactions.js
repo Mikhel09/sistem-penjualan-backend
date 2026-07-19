@@ -7,7 +7,7 @@ const { transaksiSchema } = require('../schemas');
 const router = express.Router();
 
 router.post('/', verifyToken, validate(transaksiSchema), async (req, res) => {
-  const { items, no_meja, catatan } = req.body;
+  const { items, no_meja, catatan, payment_method } = req.body;
   const storeId = req.store_id || req.body.store_id;
   if (!storeId) {
     return res.status(400).json({ error: 'Cabang wajib dipilih' });
@@ -36,8 +36,9 @@ router.post('/', verifyToken, validate(transaksiSchema), async (req, res) => {
     }
 
     const transResult = await client.query(
-      'INSERT INTO transactions (tenant_id, store_id, user_id, total, no_meja, catatan) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-      [req.tenant_id, storeId, req.user_id, total, no_meja || null, catatan || null]
+      `INSERT INTO transactions (tenant_id, store_id, user_id, total, no_meja, catatan, payment_method)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [req.tenant_id, storeId, req.user_id, total, no_meja || null, catatan || null, payment_method || 'tunai']
     );
     const transactionId = transResult.rows[0].id;
 
