@@ -10,6 +10,7 @@ const laporanRoutes = require('./routes/laporan');
 const validate = require('./middleware/validate');
 const { produkSchema } = require('./schemas');
 const storeRoutes = require('./routes/stores');
+const { authLimiter, apiLimiter } = require('./middleware/rateLimiter');
 
 require('dotenv').config();
 
@@ -18,6 +19,7 @@ app.use(cors({
      origin: ['http://localhost:5173', 'https://sistem-penjualan-frontend.vercel.app'],
    }));
 app.use(express.json());
+app.use(apiLimiter);
 app.use('/api/users', userRoutes);
 app.use('/api/laporan', laporanRoutes);
 app.use('/api/stores', storeRoutes);
@@ -28,7 +30,7 @@ app.get('/', (req, res) => {
 });
 
 // Route auth TIDAK perlu login (justru untuk login/register)
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 
 // Endpoint produk SEKARANG wajib login (pakai verifyToken)
 // dan otomatis terfilter sesuai tenant yang login
