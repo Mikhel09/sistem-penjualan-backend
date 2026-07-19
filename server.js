@@ -6,6 +6,7 @@ const verifyToken = require('./middleware/auth');
 const transactionRoutes = require('./routes/transactions');
 const checkRole = require('./middleware/checkRole');
 const userRoutes = require('./routes/users');
+const laporanRoutes = require('./routes/laporan');
 require('dotenv').config();
 
 const app = express();
