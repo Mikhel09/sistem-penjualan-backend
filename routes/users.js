@@ -3,11 +3,12 @@ const bcrypt = require('bcrypt');
 const pool = require('../db');
 const verifyToken = require('../middleware/auth');
 const checkRole = require('../middleware/checkRole');
+const validate = require('../middleware/validate');
+const { staffSchema } = require('../schemas');
 
 const router = express.Router();
 
-// Owner menambahkan staff (kasir/admin) baru, di tenant yang sama dengan owner ini
-router.post('/', verifyToken, checkRole('owner'), async (req, res) => {
+router.post('/', verifyToken, checkRole('owner'), validate(staffSchema), async (req, res) => {
   const { nama, email, password, role } = req.body;
 
   try {
@@ -29,7 +30,6 @@ router.post('/', verifyToken, checkRole('owner'), async (req, res) => {
   }
 });
 
-// Owner melihat daftar staff di tenant-nya sendiri
 router.get('/', verifyToken, checkRole('owner'), async (req, res) => {
   try {
     const result = await pool.query(

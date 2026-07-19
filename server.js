@@ -7,6 +7,8 @@ const transactionRoutes = require('./routes/transactions');
 const checkRole = require('./middleware/checkRole');
 const userRoutes = require('./routes/users');
 const laporanRoutes = require('./routes/laporan');
+const validate = require('./middleware/validate');
+const { produkSchema } = require('./schemas');
 require('dotenv').config();
 
 const app = express();
@@ -40,7 +42,7 @@ app.get('/api/products', verifyToken, async (req, res) => {
   }
 });
 
-app.post('/api/products', verifyToken, checkRole('owner', 'admin'), async (req, res) => {
+app.post('/api/products', verifyToken, checkRole('owner', 'admin'), validate(produkSchema), async (req, res) => {
   try {
     const { nama, harga, stok, attributes } = req.body;
     const result = await pool.query(
@@ -62,7 +64,7 @@ app.listen(PORT, () => {
 });
 
 // Edit produk (hanya owner/admin, hanya produk milik tenant sendiri)
-app.put('/api/products/:id', verifyToken, checkRole('owner', 'admin'), async (req, res) => {
+app.put('/api/products/:id', verifyToken, checkRole('owner', 'admin'), validate(produkSchema), async (req, res) => {
   const { id } = req.params;
   const { nama, harga, stok, attributes } = req.body;
 

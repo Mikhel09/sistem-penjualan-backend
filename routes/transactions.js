@@ -1,14 +1,13 @@
 const express = require('express');
 const pool = require('../db');
 const verifyToken = require('../middleware/auth');
+const validate = require('../middleware/validate');
+const { transaksiSchema } = require('../schemas');
 
 const router = express.Router();
 
-router.post('/', verifyToken, async (req, res) => {
+router.post('/', verifyToken, validate(transaksiSchema), async (req, res) => {
   const { items, no_meja, catatan } = req.body;
-  if (!items || items.length === 0) {
-    return res.status(400).json({ error: 'Keranjang kosong' });
-  }
 
   const client = await pool.connect();
   try {
