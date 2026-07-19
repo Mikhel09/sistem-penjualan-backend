@@ -23,6 +23,13 @@ router.post('/register', validate(registerSchema), async (req, res) => {
       [nama_bisnis, jenis_usaha]
     );
     const tenantId = tenantResult.rows[0].id;
+
+    // Buat 1 cabang default otomatis untuk tenant baru ini
+    await pool.query(
+      'INSERT INTO stores (tenant_id, nama_toko) VALUES ($1, $2)',
+      [tenantId, 'Cabang Utama']
+    );
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const userResult = await pool.query(
       `INSERT INTO users (tenant_id, nama, email, password, role)
@@ -40,8 +47,10 @@ router.post('/login', validate(loginSchema), async (req, res) => {
   const { email, password } = req.body;
   try {
     const result = await pool.query(
-      `SELECT users.*, tenants.jenis_usaha, tenants.nama_bisnis
-       FROM users JOIN tenants ON users.tenant_id = tenants.id
+      `SELECT users.*, tenants.jenis_usaha, tenants.nama_bisnis, stores.nama_toko
+       FROM users
+       JOIN tenants ON users.tenant_id = tenants.id
+       LEFT JOIN stores ON users.store_id = stores.id
        WHERE users.email = $1`,
       [email]
     );
@@ -54,7 +63,7 @@ router.post('/login', validate(loginSchema), async (req, res) => {
       return res.status(400).json({ error: 'Email atau password salah' });
     }
     const token = jwt.sign(
-      { user_id: user.id, tenant_id: user.tenant_id, role: user.role },
+      { user_id: user.id, tenant_id: user.tenant_id, role: user.role, store_id: user.store_id },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -64,6 +73,7 @@ router.post('/login', validate(loginSchema), async (req, res) => {
       user: {
         id: user.id, nama: user.nama, email: user.email, role: user.role,
         jenis_usaha: user.jenis_usaha, nama_bisnis: user.nama_bisnis,
+        store_id: user.store_id, nama_toko: user.nama_toko,
       },
     });
   } catch (err) {
@@ -72,41 +82,30 @@ router.post('/login', validate(loginSchema), async (req, res) => {
   }
 });
 
-// BARU: minta link reset password
 router.post('/lupa-password', async (req, res) => {
   const { email } = req.body;
   if (!email) {
     return res.status(400).json({ error: 'Email wajib diisi' });
   }
-
   try {
     const result = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-
-    // Sengaja beri pesan yang sama baik email ditemukan atau tidak,
-    // supaya orang lain tidak bisa "menebak-nebak" email siapa saja yang terdaftar
     const pesanUmum = { message: 'Jika email terdaftar, link reset password sudah dikirim ke email tersebut' };
-
     if (result.rows.length === 0) {
       return res.json(pesanUmum);
     }
-
     const token = crypto.randomBytes(32).toString('hex');
-    const expires = new Date(Date.now() + 15 * 60 * 1000); // berlaku 15 menit
-
+    const expires = new Date(Date.now() + 15 * 60 * 1000);
     await pool.query(
       'UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE email = $3',
       [token, expires, email]
     );
-
     const resetUrl = `${process.env.FRONTEND_URL}/?token=${token}`;
-
     await resend.emails.send({
       from: 'onboarding@resend.dev',
       to: email,
       subject: 'Reset Password - Sistem Penjualan',
       html: `<p>Klik link berikut untuk membuat password baru (berlaku 15 menit):</p><p><a href="${resetUrl}">${resetUrl}</a></p>`,
     });
-
     res.json(pesanUmum);
   } catch (err) {
     console.error(err);
@@ -114,30 +113,24 @@ router.post('/lupa-password', async (req, res) => {
   }
 });
 
-// BARU: submit password baru pakai token dari email
 router.post('/reset-password', async (req, res) => {
   const { token, password_baru } = req.body;
-
   if (!token || !password_baru || password_baru.length < 6) {
     return res.status(400).json({ error: 'Data tidak valid, password minimal 6 karakter' });
   }
-
   try {
     const result = await pool.query(
       'SELECT id FROM users WHERE reset_token = $1 AND reset_token_expires > NOW()',
       [token]
     );
-
     if (result.rows.length === 0) {
       return res.status(400).json({ error: 'Token tidak valid atau sudah kadaluarsa, minta link baru' });
     }
-
     const hashedPassword = await bcrypt.hash(password_baru, 10);
     await pool.query(
       'UPDATE users SET password = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2',
       [hashedPassword, result.rows[0].id]
     );
-
     res.json({ message: 'Password berhasil diubah, silakan login dengan password baru' });
   } catch (err) {
     console.error(err);

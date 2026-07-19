@@ -8,6 +8,10 @@ const router = express.Router();
 
 router.post('/', verifyToken, validate(transaksiSchema), async (req, res) => {
   const { items, no_meja, catatan } = req.body;
+  const storeId = req.store_id || req.body.store_id;
+  if (!storeId) {
+    return res.status(400).json({ error: 'Cabang wajib dipilih' });
+  }
 
   const client = await pool.connect();
   try {
@@ -17,11 +21,11 @@ router.post('/', verifyToken, validate(transaksiSchema), async (req, res) => {
 
     for (const item of items) {
       const productResult = await client.query(
-        'SELECT * FROM products WHERE id = $1 AND tenant_id = $2',
-        [item.product_id, req.tenant_id]
+        'SELECT * FROM products WHERE id = $1 AND tenant_id = $2 AND store_id = $3',
+        [item.product_id, req.tenant_id, storeId]
       );
       if (productResult.rows.length === 0) {
-        throw new Error(`Produk id ${item.product_id} tidak ditemukan`);
+        throw new Error(`Produk id ${item.product_id} tidak ditemukan di cabang ini`);
       }
       const product = productResult.rows[0];
       if (product.stok < item.qty) {
@@ -32,8 +36,8 @@ router.post('/', verifyToken, validate(transaksiSchema), async (req, res) => {
     }
 
     const transResult = await client.query(
-      'INSERT INTO transactions (tenant_id, user_id, total, no_meja, catatan) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-      [req.tenant_id, req.user_id, total, no_meja || null, catatan || null]
+      'INSERT INTO transactions (tenant_id, store_id, user_id, total, no_meja, catatan) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [req.tenant_id, storeId, req.user_id, total, no_meja || null, catatan || null]
     );
     const transactionId = transResult.rows[0].id;
 
@@ -59,9 +63,10 @@ router.post('/', verifyToken, validate(transaksiSchema), async (req, res) => {
 router.get('/', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT transactions.*, users.nama AS nama_kasir
+      `SELECT transactions.*, users.nama AS nama_kasir, stores.nama_toko
        FROM transactions
        JOIN users ON transactions.user_id = users.id
+       JOIN stores ON transactions.store_id = stores.id
        WHERE transactions.tenant_id = $1
        ORDER BY transactions.created_at DESC`,
       [req.tenant_id]
@@ -77,9 +82,10 @@ router.get('/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
   try {
     const transResult = await pool.query(
-      `SELECT transactions.*, users.nama AS nama_kasir
+      `SELECT transactions.*, users.nama AS nama_kasir, stores.nama_toko
        FROM transactions
        JOIN users ON transactions.user_id = users.id
+       JOIN stores ON transactions.store_id = stores.id
        WHERE transactions.id = $1 AND transactions.tenant_id = $2`,
       [id, req.tenant_id]
     );

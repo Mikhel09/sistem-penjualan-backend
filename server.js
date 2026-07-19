@@ -9,6 +9,8 @@ const userRoutes = require('./routes/users');
 const laporanRoutes = require('./routes/laporan');
 const validate = require('./middleware/validate');
 const { produkSchema } = require('./schemas');
+const storeRoutes = require('./routes/stores');
+
 require('dotenv').config();
 
 const app = express();
@@ -18,6 +20,7 @@ app.use(cors({
 app.use(express.json());
 app.use('/api/users', userRoutes);
 app.use('/api/laporan', laporanRoutes);
+app.use('/api/stores', storeRoutes);
 
 
 app.get('/', (req, res) => {
@@ -31,10 +34,32 @@ app.use('/api/auth', authRoutes);
 // dan otomatis terfilter sesuai tenant yang login
 app.get('/api/products', verifyToken, async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT * FROM products WHERE tenant_id = $1 ORDER BY id',
-      [req.tenant_id] // <-- diambil dari token, bukan dari frontend
-    );
+    let result;
+    if (req.role === 'owner') {
+      const filterStore = req.query.store_id;
+      if (filterStore) {
+        result = await pool.query(
+          `SELECT products.*, stores.nama_toko FROM products
+           JOIN stores ON products.store_id = stores.id
+           WHERE products.tenant_id = $1 AND products.store_id = $2 ORDER BY products.id`,
+          [req.tenant_id, filterStore]
+        );
+      } else {
+        result = await pool.query(
+          `SELECT products.*, stores.nama_toko FROM products
+           JOIN stores ON products.store_id = stores.id
+           WHERE products.tenant_id = $1 ORDER BY products.id`,
+          [req.tenant_id]
+        );
+      }
+    } else {
+      result = await pool.query(
+        `SELECT products.*, stores.nama_toko FROM products
+         JOIN stores ON products.store_id = stores.id
+         WHERE products.tenant_id = $1 AND products.store_id = $2 ORDER BY products.id`,
+        [req.tenant_id, req.store_id]
+      );
+    }
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -45,9 +70,15 @@ app.get('/api/products', verifyToken, async (req, res) => {
 app.post('/api/products', verifyToken, checkRole('owner', 'admin'), validate(produkSchema), async (req, res) => {
   try {
     const { nama, harga, stok, attributes } = req.body;
+    // Kalau staff (punya store_id sendiri), paksa pakai cabangnya sendiri.
+    // Kalau owner (store_id kosong), wajib pilih cabang lewat body.
+    const storeId = req.store_id || req.body.store_id;
+    if (!storeId) {
+      return res.status(400).json({ error: 'Cabang wajib dipilih' });
+    }
     const result = await pool.query(
-      'INSERT INTO products (tenant_id, nama, harga, stok, attributes) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [req.tenant_id, nama, harga, stok, attributes || {}] // tenant_id dari token
+      'INSERT INTO products (tenant_id, store_id, nama, harga, stok, attributes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [req.tenant_id, storeId, nama, harga, stok, attributes || {}]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -55,7 +86,6 @@ app.post('/api/products', verifyToken, checkRole('owner', 'admin'), validate(pro
     res.status(500).json({ error: 'Gagal menambah produk' });
   }
 });
-
 app.use('/api/transactions', transactionRoutes);
 
 const PORT = process.env.PORT || 5000;
@@ -67,20 +97,15 @@ app.listen(PORT, () => {
 app.put('/api/products/:id', verifyToken, checkRole('owner', 'admin'), validate(produkSchema), async (req, res) => {
   const { id } = req.params;
   const { nama, harga, stok, attributes } = req.body;
-
   try {
     const result = await pool.query(
-      `UPDATE products
-       SET nama = $1, harga = $2, stok = $3, attributes = $4
-       WHERE id = $5 AND tenant_id = $6
-       RETURNING *`,
+      `UPDATE products SET nama = $1, harga = $2, stok = $3, attributes = $4
+       WHERE id = $5 AND tenant_id = $6 RETURNING *`,
       [nama, harga, stok, attributes || {}, id, req.tenant_id]
     );
-
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Produk tidak ditemukan' });
     }
-
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);

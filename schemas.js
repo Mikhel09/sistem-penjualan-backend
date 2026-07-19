@@ -27,6 +27,7 @@ const staffSchema = z.object({
   email: z.string().email('Format email tidak valid'),
   password: z.string().min(6, 'Password minimal 6 karakter'),
   role: z.enum(['kasir', 'admin']).optional(),
+  store_id: z.number(),
 });
 
 const transaksiSchema = z.object({

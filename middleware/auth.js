@@ -6,19 +6,17 @@ function verifyToken(req, res, next) {
   if (!authHeader) {
     return res.status(401).json({ error: 'Token tidak ditemukan, silakan login' });
   }
-
-  const token = authHeader.split(' ')[1]; // format: "Bearer <token>"
+  const token = authHeader.split(' ')[1];
   if (!token) {
     return res.status(401).json({ error: 'Format token salah' });
   }
-
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // Simpan info tenant/user ke request, supaya bisa dipakai di endpoint manapun
     req.tenant_id = decoded.tenant_id;
     req.user_id = decoded.user_id;
     req.role = decoded.role;
-    next(); // lanjut ke endpoint tujuan
+    req.store_id = decoded.store_id; // BARU: null untuk owner, terisi untuk kasir/admin
+    next();
   } catch (err) {
     return res.status(401).json({ error: 'Token tidak valid atau kadaluarsa' });
   }
