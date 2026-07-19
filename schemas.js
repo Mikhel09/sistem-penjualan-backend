@@ -19,6 +19,7 @@ const produkSchema = z.object({
   nama: z.string().min(1, 'Nama produk wajib diisi'),
   harga: z.number().positive('Harga harus lebih dari 0'),
   stok: z.number().int('Stok harus bilangan bulat').nonnegative('Stok tidak boleh negatif'),
+  stok_minimum: z.number().int().nonnegative().optional(),
   attributes: z.record(z.any()).optional(),
 });
 

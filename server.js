@@ -71,16 +71,14 @@ app.get('/api/products', verifyToken, async (req, res) => {
 
 app.post('/api/products', verifyToken, checkRole('owner', 'admin'), validate(produkSchema), async (req, res) => {
   try {
-    const { nama, harga, stok, attributes } = req.body;
-    // Kalau staff (punya store_id sendiri), paksa pakai cabangnya sendiri.
-    // Kalau owner (store_id kosong), wajib pilih cabang lewat body.
+    const { nama, harga, stok, stok_minimum, attributes } = req.body;
     const storeId = req.store_id || req.body.store_id;
     if (!storeId) {
       return res.status(400).json({ error: 'Cabang wajib dipilih' });
     }
     const result = await pool.query(
-      'INSERT INTO products (tenant_id, store_id, nama, harga, stok, attributes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [req.tenant_id, storeId, nama, harga, stok, attributes || {}]
+      'INSERT INTO products (tenant_id, store_id, nama, harga, stok, stok_minimum, attributes) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [req.tenant_id, storeId, nama, harga, stok, stok_minimum ?? 5, attributes || {}]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -98,12 +96,12 @@ app.listen(PORT, () => {
 // Edit produk (hanya owner/admin, hanya produk milik tenant sendiri)
 app.put('/api/products/:id', verifyToken, checkRole('owner', 'admin'), validate(produkSchema), async (req, res) => {
   const { id } = req.params;
-  const { nama, harga, stok, attributes } = req.body;
+  const { nama, harga, stok, stok_minimum, attributes } = req.body;
   try {
     const result = await pool.query(
-      `UPDATE products SET nama = $1, harga = $2, stok = $3, attributes = $4
-       WHERE id = $5 AND tenant_id = $6 RETURNING *`,
-      [nama, harga, stok, attributes || {}, id, req.tenant_id]
+      `UPDATE products SET nama = $1, harga = $2, stok = $3, stok_minimum = $4, attributes = $5
+       WHERE id = $6 AND tenant_id = $7 RETURNING *`,
+      [nama, harga, stok, stok_minimum ?? 5, attributes || {}, id, req.tenant_id]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Produk tidak ditemukan' });
@@ -133,5 +131,32 @@ app.delete('/api/products/:id', verifyToken, checkRole('owner', 'admin'), async 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Gagal menghapus produk' });
+  }
+});
+
+app.get('/api/products/stok-menipis/list', verifyToken, async (req, res) => {
+  try {
+    let result;
+    if (req.role === 'owner') {
+      result = await pool.query(
+        `SELECT products.*, stores.nama_toko FROM products
+         JOIN stores ON products.store_id = stores.id
+         WHERE products.tenant_id = $1 AND products.stok <= products.stok_minimum
+         ORDER BY products.stok ASC`,
+        [req.tenant_id]
+      );
+    } else {
+      result = await pool.query(
+        `SELECT products.*, stores.nama_toko FROM products
+         JOIN stores ON products.store_id = stores.id
+         WHERE products.tenant_id = $1 AND products.store_id = $2 AND products.stok <= products.stok_minimum
+         ORDER BY products.stok ASC`,
+        [req.tenant_id, req.store_id]
+      );
+    }
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal mengambil data stok menipis' });
   }
 });
