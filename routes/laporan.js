@@ -49,4 +49,26 @@ router.get('/', verifyToken, checkRole('owner', 'admin'), async (req, res) => {
   }
 });
 
+router.get('/grafik', verifyToken, checkRole('owner', 'admin'), async (req, res) => {
+  const { dari, sampai } = req.query;
+
+  const tanggalMulai = dari ? `${dari} 00:00:00` : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const tanggalSelesai = sampai ? `${sampai} 23:59:59` : new Date().toISOString();
+
+  try {
+    const result = await pool.query(
+      `SELECT DATE(created_at) AS tanggal, SUM(total) AS total_harian
+       FROM transactions
+       WHERE tenant_id = $1 AND created_at BETWEEN $2 AND $3
+       GROUP BY DATE(created_at)
+       ORDER BY tanggal ASC`,
+      [req.tenant_id, tanggalMulai, tanggalSelesai]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal mengambil data grafik' });
+  }
+});
+
 module.exports = router;
