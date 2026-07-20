@@ -12,6 +12,8 @@ const { produkSchema } = require('./schemas');
 const storeRoutes = require('./routes/stores');
 const { authLimiter, apiLimiter } = require('./middleware/rateLimiter');
 const customerRoutes = require('./routes/customers');
+const supplierRoutes = require('./routes/suppliers');
+const purchaseRoutes = require('./routes/purchases');
 require('dotenv').config();
 
 const app = express();
@@ -24,6 +26,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/laporan', laporanRoutes);
 app.use('/api/stores', storeRoutes);
 app.use('/api/customers', customerRoutes);
+app.use('/api/suppliers', supplierRoutes);
+app.use('/api/purchases', purchaseRoutes);
 
 
 app.get('/', (req, res) => {
