@@ -45,6 +45,7 @@ const transaksiSchema = z.object({
   catatan: z.string().optional(),
   store_id: z.number().optional(),
   payment_method: z.enum(['tunai', 'kartu', 'qris']).optional(),
+  customer_id: z.number().optional(),
 });
 
 module.exports = { registerSchema, loginSchema, produkSchema, staffSchema, transaksiSchema };

@@ -11,7 +11,7 @@ const validate = require('./middleware/validate');
 const { produkSchema } = require('./schemas');
 const storeRoutes = require('./routes/stores');
 const { authLimiter, apiLimiter } = require('./middleware/rateLimiter');
-
+const customerRoutes = require('./routes/customers');
 require('dotenv').config();
 
 const app = express();
@@ -23,6 +23,7 @@ app.use(apiLimiter);
 app.use('/api/users', userRoutes);
 app.use('/api/laporan', laporanRoutes);
 app.use('/api/stores', storeRoutes);
+app.use('/api/customers', customerRoutes);
 
 
 app.get('/', (req, res) => {
