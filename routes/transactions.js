@@ -25,12 +25,12 @@ router.post('/', verifyToken, validate(transaksiSchema), async (req, res) => {
 
       if (item.variant_id) {
         const variantResult = await client.query(
-          `SELECT product_variants.*, products.nama, products.harga
-           FROM product_variants
-           JOIN products ON product_variants.product_id = products.id
-           WHERE product_variants.id = $1 AND products.tenant_id = $2 AND products.store_id = $3`,
-          [item.variant_id, req.tenant_id, storeId]
-        );
+        `SELECT product_variants.*, products.nama, products.harga AS harga_produk
+        FROM product_variants
+        JOIN products ON product_variants.product_id = products.id
+        WHERE product_variants.id = $1 AND products.tenant_id = $2 AND products.store_id = $3`,
+        [item.variant_id, req.tenant_id, storeId]
+      );
         if (variantResult.rows.length === 0) {
           throw new Error('Varian produk tidak ditemukan di cabang ini');
         }
@@ -38,7 +38,7 @@ router.post('/', verifyToken, validate(transaksiSchema), async (req, res) => {
         if (variant.stok < item.qty) {
           throw new Error(`Stok "${variant.nama}" (${variant.ukuran || ''} ${variant.warna || ''}) tidak cukup`);
         }
-        product = { id: variant.product_id, nama: variant.nama, harga: variant.harga };
+        product = { id: variant.product_id, nama: variant.nama, harga: variant.harga ?? variant.harga_produk };
       } else {
         const productResult = await client.query(
           'SELECT * FROM products WHERE id = $1 AND tenant_id = $2 AND store_id = $3',
