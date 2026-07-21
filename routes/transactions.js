@@ -20,19 +20,46 @@ router.post('/', verifyToken, validate(transaksiSchema), async (req, res) => {
     const itemDetails = [];
 
     for (const item of items) {
-      const productResult = await client.query(
-        'SELECT * FROM products WHERE id = $1 AND tenant_id = $2 AND store_id = $3',
-        [item.product_id, req.tenant_id, storeId]
-      );
-      if (productResult.rows.length === 0) {
-        throw new Error(`Produk id ${item.product_id} tidak ditemukan di cabang ini`);
+      let product;
+      let variant = null;
+
+      if (item.variant_id) {
+        const variantResult = await client.query(
+          `SELECT product_variants.*, products.nama, products.harga
+           FROM product_variants
+           JOIN products ON product_variants.product_id = products.id
+           WHERE product_variants.id = $1 AND products.tenant_id = $2 AND products.store_id = $3`,
+          [item.variant_id, req.tenant_id, storeId]
+        );
+        if (variantResult.rows.length === 0) {
+          throw new Error('Varian produk tidak ditemukan di cabang ini');
+        }
+        variant = variantResult.rows[0];
+        if (variant.stok < item.qty) {
+          throw new Error(`Stok "${variant.nama}" (${variant.ukuran || ''} ${variant.warna || ''}) tidak cukup`);
+        }
+        product = { id: variant.product_id, nama: variant.nama, harga: variant.harga };
+      } else {
+        const productResult = await client.query(
+          'SELECT * FROM products WHERE id = $1 AND tenant_id = $2 AND store_id = $3',
+          [item.product_id, req.tenant_id, storeId]
+        );
+        if (productResult.rows.length === 0) {
+          throw new Error(`Produk id ${item.product_id} tidak ditemukan di cabang ini`);
+        }
+        product = productResult.rows[0];
+        if (product.stok < item.qty) {
+          throw new Error(`Stok "${product.nama}" tidak cukup`);
+        }
       }
-      const product = productResult.rows[0];
-      if (product.stok < item.qty) {
-        throw new Error(`Stok "${product.nama}" tidak cukup`);
-      }
+
       total += Number(product.harga) * item.qty;
-      itemDetails.push({ product_id: product.id, qty: item.qty, harga_saat_jual: product.harga });
+      itemDetails.push({
+        product_id: product.id,
+        variant_id: variant ? variant.id : null,
+        qty: item.qty,
+        harga_saat_jual: product.harga,
+      });
     }
 
     const transResult = await client.query(
@@ -44,13 +71,16 @@ router.post('/', verifyToken, validate(transaksiSchema), async (req, res) => {
 
     for (const detail of itemDetails) {
       await client.query(
-        'INSERT INTO transaction_items (transaction_id, product_id, qty, harga_saat_jual) VALUES ($1, $2, $3, $4)',
-        [transactionId, detail.product_id, detail.qty, detail.harga_saat_jual]
+        'INSERT INTO transaction_items (transaction_id, product_id, variant_id, qty, harga_saat_jual) VALUES ($1, $2, $3, $4, $5)',
+        [transactionId, detail.product_id, detail.variant_id, detail.qty, detail.harga_saat_jual]
       );
-      await client.query('UPDATE products SET stok = stok - $1 WHERE id = $2', [detail.qty, detail.product_id]);
+      if (detail.variant_id) {
+        await client.query('UPDATE product_variants SET stok = stok - $1 WHERE id = $2', [detail.qty, detail.variant_id]);
+      } else {
+        await client.query('UPDATE products SET stok = stok - $1 WHERE id = $2', [detail.qty, detail.product_id]);
+      }
     }
 
-    // Kalau ada pelanggan terkait, beri poin: 1 poin per Rp 10.000 belanja
     if (customer_id) {
       const poinDidapat = Math.floor(total / 10000);
       await client.query('UPDATE customers SET poin = poin + $1 WHERE id = $2', [poinDidapat, customer_id]);
@@ -102,9 +132,11 @@ router.get('/:id', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Transaksi tidak ditemukan' });
     }
     const itemsResult = await pool.query(
-      `SELECT transaction_items.*, products.nama AS nama_produk
+      `SELECT transaction_items.*, products.nama AS nama_produk,
+              product_variants.ukuran, product_variants.warna
        FROM transaction_items
        JOIN products ON transaction_items.product_id = products.id
+       LEFT JOIN product_variants ON transaction_items.variant_id = product_variants.id
        WHERE transaction_items.transaction_id = $1`,
       [id]
     );

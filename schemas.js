@@ -18,10 +18,19 @@ const loginSchema = z.object({
 const produkSchema = z.object({
   nama: z.string().min(1, 'Nama produk wajib diisi'),
   harga: z.number().positive('Harga harus lebih dari 0'),
-  stok: z.number().int('Stok harus bilangan bulat').nonnegative('Stok tidak boleh negatif'),
+  stok: z.number().int().nonnegative().optional(), // dipakai untuk kategori tanpa varian
   stok_minimum: z.number().int().nonnegative().optional(),
   attributes: z.record(z.any()).optional(),
   store_id: z.number().optional(),
+  varian: z
+    .array(
+      z.object({
+        ukuran: z.string().optional(),
+        warna: z.string().optional(),
+        stok: z.number().int().nonnegative(),
+      })
+    )
+    .optional(),
 });
 
 const staffSchema = z.object({
@@ -37,6 +46,7 @@ const transaksiSchema = z.object({
     .array(
       z.object({
         product_id: z.number(),
+        variant_id: z.number().optional(),
         qty: z.number().int().positive('Qty harus lebih dari 0'),
       })
     )
