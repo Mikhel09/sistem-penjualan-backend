@@ -107,7 +107,10 @@ app.post('/api/products', verifyToken, checkRole('owner', 'admin'), validate(pro
       'INSERT INTO products (tenant_id, store_id, nama, harga, stok, stok_minimum, attributes) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
       [req.tenant_id, storeId, nama, harga, isVarianMode ? 0 : (stok ?? 0), stok_minimum ?? 5, attributes || {}]
     );
-    const product = productResult.rows[0];
+    let product = productResult.rows[0];
+
+    const skuUpdate = await client.query('UPDATE products SET sku = $1 WHERE id = $2 RETURNING *', [`P${product.id}`, product.id]);
+    product = skuUpdate.rows[0];
 
     const savedVariants = [];
     if (isVarianMode) {
@@ -116,7 +119,12 @@ app.post('/api/products', verifyToken, checkRole('owner', 'admin'), validate(pro
           'INSERT INTO product_variants (product_id, ukuran, warna, stok, harga) VALUES ($1, $2, $3, $4, $5) RETURNING *',
           [product.id, v.ukuran || null, v.warna || null, v.stok, v.harga || null]
         );
-        savedVariants.push(vResult.rows[0]);
+        const variant = vResult.rows[0];
+        const vSkuUpdate = await client.query(
+          'UPDATE product_variants SET sku = $1 WHERE id = $2 RETURNING *',
+          [`P${product.id}V${variant.id}`, variant.id]
+        );
+        savedVariants.push(vSkuUpdate.rows[0]);
       }
     }
 
@@ -161,17 +169,22 @@ app.put('/api/products/:id', verifyToken, checkRole('owner', 'admin'), validate(
 // Tambah varian baru ke produk yang sudah ada (misal nambah 1 warna baru)
 app.post('/api/products/:id/variants', verifyToken, checkRole('owner', 'admin'), async (req, res) => {
   const { id } = req.params;
-  const { ukuran, warna, stok } = req.body;
+  const { ukuran, warna, stok, harga } = req.body;
   try {
     const productCheck = await pool.query('SELECT id FROM products WHERE id = $1 AND tenant_id = $2', [id, req.tenant_id]);
     if (productCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Produk tidak ditemukan' });
     }
     const result = await pool.query(
-      'INSERT INTO product_variants (product_id, ukuran, warna, stok) VALUES ($1, $2, $3, $4) RETURNING *',
-      [id, ukuran || null, warna || null, Number(stok) || 0]
+      'INSERT INTO product_variants (product_id, ukuran, warna, stok, harga) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [id, ukuran || null, warna || null, Number(stok) || 0, harga ? Number(harga) : null]
     );
-    res.status(201).json(result.rows[0]);
+    const variant = result.rows[0];
+    const skuUpdate = await pool.query(
+      'UPDATE product_variants SET sku = $1 WHERE id = $2 RETURNING *',
+      [`P${id}V${variant.id}`, variant.id]
+    );
+    res.status(201).json(skuUpdate.rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Gagal menambah varian' });
@@ -273,5 +286,46 @@ app.get('/api/products/stok-menipis/list', verifyToken, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Gagal mengambil data stok menipis' });
+  }
+});
+
+app.get('/api/products/cari-kode', verifyToken, async (req, res) => {
+  const { kode } = req.query;
+  if (!kode) {
+    return res.status(400).json({ error: 'Kode wajib diisi' });
+  }
+  try {
+    const storeFilter = req.role === 'owner' ? null : req.store_id;
+
+    const variantQuery = storeFilter
+      ? `SELECT product_variants.*, products.nama, products.harga AS harga_produk
+         FROM product_variants
+         JOIN products ON product_variants.product_id = products.id
+         WHERE products.tenant_id = $1 AND products.store_id = $2 AND product_variants.sku = $3`
+      : `SELECT product_variants.*, products.nama, products.harga AS harga_produk
+         FROM product_variants
+         JOIN products ON product_variants.product_id = products.id
+         WHERE products.tenant_id = $1 AND product_variants.sku = $2`;
+    const variantParams = storeFilter ? [req.tenant_id, storeFilter, kode] : [req.tenant_id, kode];
+    const variantResult = await pool.query(variantQuery, variantParams);
+
+    if (variantResult.rows.length > 0) {
+      return res.json({ tipe: 'varian', data: variantResult.rows[0] });
+    }
+
+    const productQuery = storeFilter
+      ? `SELECT * FROM products WHERE tenant_id = $1 AND store_id = $2 AND (sku = $3 OR attributes->>'barcode' = $3)`
+      : `SELECT * FROM products WHERE tenant_id = $1 AND (sku = $2 OR attributes->>'barcode' = $2)`;
+    const productParams = storeFilter ? [req.tenant_id, storeFilter, kode] : [req.tenant_id, kode];
+    const productResult = await pool.query(productQuery, productParams);
+
+    if (productResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Produk dengan kode ini tidak ditemukan' });
+    }
+
+    res.json({ tipe: 'produk', data: productResult.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal mencari produk' });
   }
 });
