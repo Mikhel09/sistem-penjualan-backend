@@ -113,8 +113,8 @@ app.post('/api/products', verifyToken, checkRole('owner', 'admin'), validate(pro
     if (isVarianMode) {
       for (const v of varian) {
         const vResult = await client.query(
-          'INSERT INTO product_variants (product_id, ukuran, warna, stok) VALUES ($1, $2, $3, $4) RETURNING *',
-          [product.id, v.ukuran || null, v.warna || null, v.stok]
+          'INSERT INTO product_variants (product_id, ukuran, warna, stok, harga) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+          [product.id, v.ukuran || null, v.warna || null, v.stok, v.harga || null]
         );
         savedVariants.push(vResult.rows[0]);
       }
@@ -130,6 +130,7 @@ app.post('/api/products', verifyToken, checkRole('owner', 'admin'), validate(pro
     client.release();
   }
 });
+
 app.use('/api/transactions', transactionRoutes);
 
 const PORT = process.env.PORT || 5000;
@@ -180,12 +181,12 @@ app.post('/api/products/:id/variants', verifyToken, checkRole('owner', 'admin'),
 // Ubah stok/ukuran/warna satu varian
 app.put('/api/products/:id/variants/:variantId', verifyToken, checkRole('owner', 'admin'), async (req, res) => {
   const { id, variantId } = req.params;
-  const { ukuran, warna, stok } = req.body;
+  const { ukuran, warna, stok, harga } = req.body;
   try {
     const result = await pool.query(
-      `UPDATE product_variants SET ukuran = $1, warna = $2, stok = $3
-       WHERE id = $4 AND product_id = $5 RETURNING *`,
-      [ukuran || null, warna || null, Number(stok) || 0, variantId, id]
+      `UPDATE product_variants SET ukuran = $1, warna = $2, stok = $3, harga = $4
+       WHERE id = $5 AND product_id = $6 RETURNING *`,
+      [ukuran || null, warna || null, Number(stok) || 0, harga ? Number(harga) : null, variantId, id]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Varian tidak ditemukan' });
