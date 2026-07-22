@@ -14,6 +14,7 @@ const { authLimiter, apiLimiter } = require('./middleware/rateLimiter');
 const customerRoutes = require('./routes/customers');
 const supplierRoutes = require('./routes/suppliers');
 const purchaseRoutes = require('./routes/purchases');
+const stockAdjustmentRoutes = require('./routes/stockAdjustments');
 require('dotenv').config();
 
 const app = express();
@@ -28,6 +29,8 @@ app.use('/api/stores', storeRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/purchases', purchaseRoutes);
+app.use('/api/stock-adjustments', stockAdjustmentRoutes);
+
 
 
 app.get('/', (req, res) => {
