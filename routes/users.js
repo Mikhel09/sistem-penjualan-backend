@@ -38,7 +38,7 @@ router.post('/', verifyToken, checkRole('owner'), validate(staffSchema), async (
 router.get('/', verifyToken, checkRole('owner'), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT users.id, users.nama, users.email, users.role, stores.nama_toko
+      `SELECT users.id, users.nama, users.email, users.role, users.store_id, stores.nama_toko
        FROM users LEFT JOIN stores ON users.store_id = stores.id
        WHERE users.tenant_id = $1 ORDER BY users.id`,
       [req.tenant_id]
@@ -47,6 +47,42 @@ router.get('/', verifyToken, checkRole('owner'), async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Gagal mengambil data staff' });
+  }
+});
+
+// BARU: pindahkan staff ke cabang lain
+router.put('/:id/cabang', verifyToken, checkRole('owner'), async (req, res) => {
+  const { id } = req.params;
+  const { store_id } = req.body;
+
+  if (!store_id) {
+    return res.status(400).json({ error: 'Cabang tujuan wajib dipilih' });
+  }
+
+  try {
+    const storeCheck = await pool.query(
+      'SELECT id FROM stores WHERE id = $1 AND tenant_id = $2',
+      [store_id, req.tenant_id]
+    );
+    if (storeCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Cabang tujuan tidak ditemukan' });
+    }
+
+    const result = await pool.query(
+      `UPDATE users SET store_id = $1
+       WHERE id = $2 AND tenant_id = $3 AND role != 'owner'
+       RETURNING id, nama, email, role, store_id`,
+      [store_id, id, req.tenant_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Staff tidak ditemukan, atau tidak bisa memindahkan akun owner' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memindahkan cabang' });
   }
 });
 
