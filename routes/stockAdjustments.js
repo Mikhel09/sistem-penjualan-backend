@@ -2,7 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const verifyToken = require('../middleware/auth');
 const checkRole = require('../middleware/checkRole');
-
+const checkPermission = require('../middleware/checkPermission');
 const router = express.Router();
 
 router.post('/', verifyToken, checkRole('owner', 'admin'), async (req, res) => {

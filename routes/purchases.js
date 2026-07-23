@@ -2,10 +2,10 @@ const express = require('express');
 const pool = require('../db');
 const verifyToken = require('../middleware/auth');
 const checkRole = require('../middleware/checkRole');
-
+const checkPermission = require('../middleware/checkPermission');
 const router = express.Router();
 
-router.post('/', verifyToken, checkRole('owner', 'admin'), async (req, res) => {
+router.post('/', verifyToken, checkPermission('kelola_stok'), async (req, res) => {
   const { product_id, variant_id, supplier_id, qty, harga_beli } = req.body;
   const storeId = req.store_id || req.body.store_id;
 
@@ -61,7 +61,7 @@ router.post('/', verifyToken, checkRole('owner', 'admin'), async (req, res) => {
   }
 });
 
-router.get('/', verifyToken, checkRole('owner', 'admin'), async (req, res) => {
+router.get('/', verifyToken, checkPermission('kelola_stok'), async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT purchases.*, products.nama AS nama_produk, suppliers.nama AS nama_supplier, stores.nama_toko,

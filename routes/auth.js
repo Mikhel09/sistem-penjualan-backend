@@ -47,13 +47,13 @@ router.post('/login', validate(loginSchema), async (req, res) => {
   const { email, password } = req.body;
   try {
     const result = await pool.query(
-      `SELECT users.*, tenants.jenis_usaha, tenants.nama_bisnis, stores.nama_toko
-       FROM users
-       JOIN tenants ON users.tenant_id = tenants.id
-       LEFT JOIN stores ON users.store_id = stores.id
-       WHERE users.email = $1`,
-      [email]
-    );
+        `SELECT users.*, tenants.jenis_usaha, tenants.nama_bisnis, stores.nama_toko
+        FROM users
+        JOIN tenants ON users.tenant_id = tenants.id
+        LEFT JOIN stores ON users.store_id = stores.id
+        WHERE users.email = $1`,
+        [email]
+      );
     if (result.rows.length === 0) {
       return res.status(400).json({ error: 'Email atau password salah' });
     }
@@ -74,6 +74,7 @@ router.post('/login', validate(loginSchema), async (req, res) => {
         id: user.id, nama: user.nama, email: user.email, role: user.role,
         jenis_usaha: user.jenis_usaha, nama_bisnis: user.nama_bisnis,
         store_id: user.store_id, nama_toko: user.nama_toko,
+        permissions: user.permissions || {},
       },
     });
   } catch (err) {
