@@ -22,7 +22,7 @@ const produkSchema = z.object({
   stok_minimum: z.number().int().nonnegative().optional(),
   attributes: z.record(z.any()).optional(),
   store_id: z.number().optional(),
-  foto: z.string().optional().nullable(),
+  fotos: z.array(z.string()).optional(),
   varian: z
     .array(
       z.object({
