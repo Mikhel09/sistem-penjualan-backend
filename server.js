@@ -110,7 +110,7 @@ app.post('/api/products', verifyToken, checkPermission('kelola_produk'), validat
     const productResult = await client.query(
   'INSERT INTO products (tenant_id, store_id, nama, harga, stok, stok_minimum, attributes, fotos) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
   [req.tenant_id, storeId, nama, harga, isVarianMode ? 0 : (stok ?? 0), stok_minimum ?? 5, attributes || {}, JSON.stringify(fotos || [])]
-  );
+);
     let product = productResult.rows[0];
 
     const skuUpdate = await client.query('UPDATE products SET sku = $1 WHERE id = $2 RETURNING *', [`P${product.id}`, product.id]);
@@ -155,7 +155,7 @@ app.put('/api/products/:id', verifyToken, checkPermission('kelola_produk'), vali
   const { id } = req.params;
   const { nama, harga, stok, stok_minimum, attributes, fotos } = req.body;
   try {
-  const result = await pool.query(
+    const result = await pool.query(
   `UPDATE products SET nama = $1, harga = $2, stok = COALESCE($3, stok), stok_minimum = $4, attributes = $5, fotos = $6
    WHERE id = $7 AND tenant_id = $8 RETURNING *`,
   [nama, harga, stok, stok_minimum ?? 5, attributes || {}, JSON.stringify(fotos || []), id, req.tenant_id]
